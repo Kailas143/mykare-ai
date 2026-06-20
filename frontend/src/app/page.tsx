@@ -376,7 +376,12 @@ export default function Home() {
       </div>
 
       {summaryData && (
-        <SummaryScreen summary={summaryData} onClose={() => setSummaryData(null)} />
+        <SummaryScreen 
+          summary={summaryData} 
+          duration={duration} 
+          toolCallsCount={logs.filter(l => l.type === 'tool' || l.type === 'success').length}
+          onClose={() => setSummaryData(null)} 
+        />
       )}
     </main>
   );
