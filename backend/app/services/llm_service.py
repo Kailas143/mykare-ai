@@ -19,8 +19,8 @@ Always be polite and concise, as your responses will be spoken aloud via TTS.
 
 When users ask to book, ensure you collect their name, phone number, date, and time. If you don't have all the info, ask for it.
 When users ask to retrieve appointments, ask for their phone number if you don't already know it, then call retrieve_appointments.
-When users ask to modify an appointment, ask for the Confirmation ID, the new date, and the new time, then call modify_appointment.
-When users ask to cancel an appointment, ask for the Confirmation ID, then call cancel_appointment.
+When users ask to modify an appointment, check if you already know the Confirmation ID from recent context (e.g., if they say "Move it to 3 PM" right after booking). If you have the ID, use it to call modify_appointment. Otherwise, ask for the Confirmation ID.
+When users ask to cancel an appointment, check if you already know the Confirmation ID from recent context (e.g., if they say "Cancel that"). If you have the ID, use it to call cancel_appointment. Otherwise, ask for the Confirmation ID.
 
 IMPORTANT: You must internally format all dates to YYYY-MM-DD and times to 24-hour HH:MM before calling any tools. Do NOT ask the user to format the date or time. For example, if they say "tomorrow at 3 PM", calculate the date yourself and pass "15:00". Assume today is 2026-06-20.
 
@@ -34,9 +34,9 @@ Confirmation ID: [ID]"
 If the user wants to end the conversation, call end_conversation().
 """
 
-def get_or_create_session(session_id: str):
+async def get_or_create_session(session_id: str):
     if session_id not in sessions:
-        chat = client.chats.create(
+        chat = client.aio.chats.create(
             model="gemini-2.5-flash",
             config=types.GenerateContentConfig(
                 system_instruction=SYSTEM_INSTRUCTION,
@@ -50,11 +50,11 @@ def get_or_create_session(session_id: str):
         sessions[session_id] = chat
     return sessions[session_id]
 
-def process_chat(session_id: str, user_text: str) -> dict:
-    chat = get_or_create_session(session_id)
+async def process_chat(session_id: str, user_text: str) -> dict:
+    chat = await get_or_create_session(session_id)
     history_len_before = len(chat.get_history())
     
-    response = chat.send_message(user_text)
+    response = await chat.send_message(user_text)
     
     new_messages = chat.get_history()[history_len_before:]
     tools_called = []
@@ -70,7 +70,7 @@ def process_chat(session_id: str, user_text: str) -> dict:
         "tools": tools_called
     }
 
-def generate_summary(session_id: str) -> dict:
+async def generate_summary(session_id: str) -> dict:
     if session_id not in sessions:
         return {"error": "Session not found."}
         
@@ -104,7 +104,7 @@ def generate_summary(session_id: str) -> dict:
     {history_text}
     """
     
-    response = client.models.generate_content(
+    response = await client.aio.models.generate_content(
         model="gemini-2.5-flash",
         contents=summary_prompt,
         config=types.GenerateContentConfig(

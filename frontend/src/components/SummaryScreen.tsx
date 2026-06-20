@@ -9,14 +9,27 @@ interface SummaryData {
   appointment_time: string | null;
   preferences: string | null;
   timestamp: string;
+  metrics?: {
+    stt_cost: number;
+    llm_cost: number;
+    tts_cost: number;
+    total: number;
+  };
 }
 
 interface SummaryScreenProps {
   summary: SummaryData;
+  duration: number;
+  toolCallsCount: number;
   onClose: () => void;
 }
 
-export default function SummaryScreen({ summary, onClose }: SummaryScreenProps) {
+export default function SummaryScreen({ summary, duration, toolCallsCount, onClose }: SummaryScreenProps) {
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}m ${s}s`;
+  };
   return (
     <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-300">
       <div className="bg-white rounded-3xl shadow-xl w-full max-w-lg overflow-hidden border border-slate-100">
@@ -81,10 +94,33 @@ export default function SummaryScreen({ summary, onClose }: SummaryScreenProps) 
             </div>
           </div>
 
-          <div className="pt-4 border-t border-slate-100">
-            <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">Timestamp</p>
-            <p className="text-sm font-semibold text-slate-600">{summary.timestamp || new Date().toLocaleString()}</p>
+          <div className="pt-4 border-t border-slate-100 grid grid-cols-2 gap-6">
+            <div>
+              <p className="text-sm font-medium text-slate-400 uppercase tracking-wider mb-1">Timestamp</p>
+              <p className="text-sm font-semibold text-slate-600">{summary.timestamp || new Date().toLocaleString()}</p>
+            </div>
           </div>
+
+          {/* Cost Breakdown & Session Metrics */}
+          {summary.metrics && (
+            <div className="pt-4 border-t border-slate-100">
+              <p className="text-sm font-bold text-slate-800 mb-3">Session Metrics</p>
+              <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-slate-600">Duration:</span>
+                  <span className="text-sm font-bold text-slate-800">{formatDuration(duration)}</span>
+                </div>
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium text-slate-600">Tool Calls:</span>
+                  <span className="text-sm font-bold text-slate-800">{toolCallsCount}</span>
+                </div>
+                <div className="flex justify-between items-center pt-2 border-t border-slate-200 mt-2">
+                  <span className="text-sm font-medium text-slate-600">Total Cost:</span>
+                  <span className="text-sm font-bold text-green-600">${summary.metrics.total.toFixed(4)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

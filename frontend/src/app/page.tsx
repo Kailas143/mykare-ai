@@ -2,16 +2,35 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import Avatar from '@/components/Avatar';
-import ActivityPanel from '@/components/ActivityPanel';
+import ActivityPanel, { LogEntry } from '@/components/ActivityPanel';
 import SummaryScreen from '@/components/SummaryScreen';
 
 type AvatarState = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export default function Home() {
   const [state, setState] = useState<AvatarState>('idle');
-  const [logs, setLogs] = useState<string[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [summaryData, setSummaryData] = useState<any>(null);
+  const [callStarted, setCallStarted] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [isEndingCall, setIsEndingCall] = useState(false);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (callStarted) {
+      interval = setInterval(() => {
+        setDuration(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [callStarted]);
+
+  const formatDuration = (seconds: number) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
   
   useEffect(() => {
     setSessionId(`sess_${Math.random().toString(36).substring(2, 9)}`);
@@ -28,8 +47,9 @@ export default function Home() {
   const ttsDataArrayRef = useRef<Uint8Array | null>(null);
   const ttsAnimRef = useRef<number | null>(null);
 
-  const addLog = (msg: string) => {
-    setLogs(prev => [...prev, msg]);
+  const addLog = (type: LogEntry['type'], content: string) => {
+    const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false });
+    setLogs(prev => [...prev, { timestamp, type, content }]);
   };
 
   const startListening = async () => {
@@ -55,10 +75,10 @@ export default function Home() {
 
       mediaRecorder.start();
       setState('listening');
-      addLog('Listening... Click "Stop & Send" when done.');
+      addLog('info', 'Listening... Click "Stop & Send" when done.');
     } catch (err) {
       console.error("Microphone error:", err);
-      addLog("Microphone access denied.");
+      addLog('info', "Microphone access denied.");
     }
   };
 
@@ -66,7 +86,7 @@ export default function Home() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
       setState('processing');
-      addLog('Processing audio...');
+      addLog('info', 'Processing audio...');
     }
   };
 
@@ -88,22 +108,31 @@ export default function Home() {
 
       const data = await res.json();
       
-      addLog(`User: ${data.transcript}`);
+      addLog('user', data.transcript);
       
       if (data.tools && data.tools.length > 0) {
         data.tools.forEach((t: string) => {
           let prettyTool = `Executing ${t}...`;
-          if (t === 'identify_user') prettyTool = 'Identifying user...';
-          else if (t === 'fetch_slots') prettyTool = 'Fetching available slots...';
-          else if (t === 'book_appointment') prettyTool = 'Booking confirmed ✅';
-          else if (t === 'retrieve_appointments') prettyTool = 'Retrieving appointments...';
-          else if (t === 'cancel_appointment') prettyTool = 'Canceling appointment ❌';
-          else if (t === 'modify_appointment') prettyTool = 'Modifying appointment 🔄';
-          addLog(`[Tool] ${prettyTool}`);
+          let type: LogEntry['type'] = 'tool';
+          
+          if (t === 'identify_user') prettyTool = 'identify_user';
+          else if (t === 'fetch_slots') prettyTool = 'fetch_slots';
+          else if (t === 'book_appointment') {
+            prettyTool = 'Appointment booked';
+            type = 'success';
+          }
+          else if (t === 'retrieve_appointments') prettyTool = 'retrieve_appointments';
+          else if (t === 'cancel_appointment') {
+            prettyTool = 'Appointment cancelled';
+            type = 'success';
+          }
+          else if (t === 'modify_appointment') prettyTool = 'modify_appointment';
+          
+          addLog(type, prettyTool);
         });
       }
       
-      addLog(`AI: ${data.reply}`);
+      addLog('ai', data.reply);
       
       if (data.audio_base64) {
         playTTSBase64(data.audio_base64);
@@ -113,7 +142,7 @@ export default function Home() {
       
     } catch (error) {
       console.error("Error processing audio:", error);
-      addLog(`Error processing audio/network issue.`);
+      addLog('info', `Error processing audio/network issue.`);
       setState('idle');
     }
   };
@@ -186,14 +215,14 @@ export default function Home() {
     }
     streamRef.current?.getTracks().forEach(track => track.stop());
 
-    addLog('Generating summary...');
+    addLog('info', 'Generating summary...');
     setState('processing');
     try {
       const res = await fetch(`http://localhost:8000/api/conversation/${sessionId}/summary`, {
         method: "POST"
       });
       const data = await res.json();
-      addLog("Summary generated (check console)");
+      addLog('success', "Summary generated (check console)");
       
       if (!data.timestamp) {
         data.timestamp = new Date().toLocaleString('en-GB', {
@@ -210,16 +239,68 @@ export default function Home() {
     }
   };
 
+  if (!callStarted) {
+    return (
+      <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
+        <div className="bg-white p-12 rounded-3xl shadow-sm border border-slate-100 flex flex-col items-center text-center gap-6 max-w-md">
+          <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center text-5xl mb-4">
+            📞
+          </div>
+          <h1 className="text-3xl font-bold text-slate-800">MyKare Assistant</h1>
+          <p className="text-slate-500 mb-4">Call our AI voice assistant to book, check, or cancel your appointments.</p>
+          <button 
+            onClick={() => {
+              setCallStarted(true);
+              setDuration(0);
+            }}
+            className="w-full px-8 py-4 bg-green-500 hover:bg-green-600 text-white rounded-full font-bold text-xl transition-colors shadow-lg shadow-green-200 flex items-center justify-center gap-3"
+          >
+            <span>📞</span> Start Call
+          </button>
+        </div>
+      {summaryData && (
+        <SummaryScreen 
+          summary={summaryData} 
+          duration={duration} 
+          toolCallsCount={logs.filter(l => l.type === 'tool' || l.type === 'success').length}
+          onClose={() => setSummaryData(null)} 
+        />
+      )}
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
-      <div className="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-12 items-center">
+      <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
         <audio ref={ttsAudioRef} className="hidden" crossOrigin="anonymous" />
         
-        {/* Left Column: Avatar & Controls */}
-        <div className="flex flex-col items-center gap-8 bg-white p-12 rounded-3xl shadow-sm border border-slate-100">
+        {/* Left Column: Controls & Transcript */}
+        <div className="flex flex-col gap-6 w-full">
+          {/* Avatar & Call Controls */}
+          <div className="flex flex-col items-center gap-6 bg-white p-10 rounded-3xl shadow-sm border border-slate-100 w-full">
+          
+          <div className="flex flex-col items-center mb-2">
+            <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+              <span>📞</span> Healthcare Voice Assistant
+            </h1>
+            <div className="text-slate-500 font-medium mt-2 flex items-center gap-2 bg-slate-50 px-4 py-1.5 rounded-full">
+              <span className="w-2.5 h-2.5 rounded-full bg-green-500 animate-pulse"></span>
+              Call Status: Connected • {formatDuration(duration)}
+            </div>
+          </div>
+
           <Avatar state={state} />
           
-          <div className="flex flex-col gap-4 w-full max-w-xs">
+          {/* Status Indicator */}
+          <div className="text-lg font-semibold flex items-center justify-center h-8 my-2">
+            {state === 'idle' && <span className="text-slate-500">⚪ Ready</span>}
+            {state === 'listening' && <span className="text-green-500 animate-pulse">🟢 Listening...</span>}
+            {state === 'processing' && <span className="text-yellow-500 animate-pulse">🟡 Processing...</span>}
+            {state === 'speaking' && <span className="text-blue-500 animate-pulse">🔵 Speaking...</span>}
+          </div>
+
+          <div className="flex flex-col gap-3 w-full max-w-xs mt-2">
             {state === 'idle' && (
               <button 
                 onClick={startListening}
@@ -238,21 +319,57 @@ export default function Home() {
               </button>
             )}
 
-            {state === 'idle' && logs.length > 0 && (
-              <button 
-                  onClick={endConversation}
-                  className="w-full px-6 py-3 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-full font-medium transition-colors mt-4"
-                >
-                  End Conversation & View Summary
-              </button>
-            )}
+            <button 
+              disabled={isEndingCall}
+              onClick={async () => {
+                setIsEndingCall(true);
+                await endConversation();
+                setIsEndingCall(false);
+                setCallStarted(false);
+              }}
+              className={`w-full px-6 py-4 rounded-full font-bold transition-colors mt-2 flex items-center justify-center gap-2 ${
+                isEndingCall ? 'bg-slate-200 text-slate-500 cursor-not-allowed' : 'bg-red-50 hover:bg-red-100 text-red-600'
+              }`}
+            >
+              {isEndingCall ? (
+                <>⏳ Generating Summary...</>
+              ) : (
+                <><span>☎️</span> End Call</>
+              )}
+            </button>
           </div>
         </div>
 
-        {/* Right Column: Activity Panel */}
-        <div className="flex justify-center">
-          <ActivityPanel logs={logs} />
-        </div>
+        {/* Conversation Transcript Panel */}
+        {logs.filter(l => l.type === 'user' || l.type === 'ai').length > 0 && (
+          <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 w-full">
+            <h3 className="font-semibold text-slate-700 mb-4 px-2 border-b border-slate-100 pb-2">Conversation Transcript</h3>
+            <div className="flex flex-col gap-4 max-h-[300px] overflow-y-auto px-2">
+              {logs
+                .filter(log => log.type === 'user' || log.type === 'ai')
+                .map((log, i) => (
+                  <div key={i} className={`flex flex-col ${log.type === 'user' ? 'items-end' : 'items-start'}`}>
+                    <span className="text-xs font-semibold text-slate-400 mb-1">
+                      {log.type === 'user' ? 'User' : 'Assistant'}
+                    </span>
+                    <div className={`px-4 py-2 rounded-2xl max-w-[85%] ${
+                      log.type === 'user' 
+                        ? 'bg-blue-600 text-white rounded-br-none' 
+                        : 'bg-slate-100 text-slate-700 rounded-bl-none'
+                    }`}>
+                      {log.content}
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Right Column: Activity Panel */}
+      <div className="flex justify-center w-full sticky top-8">
+        <ActivityPanel logs={logs} />
+      </div>
 
       </div>
 

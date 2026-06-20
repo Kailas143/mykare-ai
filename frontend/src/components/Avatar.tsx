@@ -71,10 +71,6 @@ export default function Avatar({ state }: AvatarProps) {
         </svg>
 
       </div>
-
-      <div className="absolute -bottom-4 font-medium text-slate-500 uppercase tracking-widest text-sm">
-        {state}
-      </div>
     </div>
   );
 }
