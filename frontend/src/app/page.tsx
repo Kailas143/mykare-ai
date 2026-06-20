@@ -97,7 +97,8 @@ export default function Home() {
       formData.append("audio", audioBlob, `recording.${ext}`);
       formData.append("session_id", sessionId);
 
-      const res = await fetch("http://localhost:8000/api/conversation", {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API_URL}/api/conversation`, {
         method: "POST",
         body: formData,
       });
@@ -218,7 +219,8 @@ export default function Home() {
     addLog('info', 'Generating summary...');
     setState('processing');
     try {
-      const res = await fetch(`http://localhost:8000/api/conversation/${sessionId}/summary`, {
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+      const res = await fetch(`${API_URL}/api/conversation/${sessionId}/summary`, {
         method: "POST"
       });
       const data = await res.json();
