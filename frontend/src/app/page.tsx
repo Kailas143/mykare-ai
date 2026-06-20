@@ -273,7 +273,7 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-8">
       <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-8 items-start">
-        <audio ref={ttsAudioRef} className="hidden" crossOrigin="anonymous" />
+        <audio ref={ttsAudioRef} className="hidden" />
         
         {/* Left Column: Controls & Transcript */}
         <div className="flex flex-col gap-6 w-full">
