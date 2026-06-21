@@ -12,7 +12,11 @@ client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY", "DUMMY_KEY"))
 # Global memory storage for sessions
 sessions = {}
 
-SYSTEM_INSTRUCTION = """
+from datetime import datetime
+
+def get_system_instruction():
+    today = datetime.now().strftime("%Y-%m-%d")
+    return f"""
 You are a helpful healthcare voice appointment assistant. Your name is MyKare Assistant.
 You can help users identify themselves, check available slots, book, modify, or cancel appointments.
 Always be polite and concise, as your responses will be spoken aloud via TTS.
@@ -22,7 +26,7 @@ When users ask to retrieve appointments, ask for their phone number if you don't
 When users ask to modify an appointment, check if you already know the Confirmation ID from recent context (e.g., if they say "Move it to 3 PM" right after booking). If you have the ID, use it to call modify_appointment. Otherwise, ask for the Confirmation ID.
 When users ask to cancel an appointment, check if you already know the Confirmation ID from recent context (e.g., if they say "Cancel that"). If you have the ID, use it to call cancel_appointment. Otherwise, ask for the Confirmation ID.
 
-IMPORTANT: You must internally format all dates to YYYY-MM-DD and times to 24-hour HH:MM before calling any tools. Do NOT ask the user to format the date or time. For example, if they say "tomorrow at 3 PM", calculate the date yourself and pass "15:00". Assume today is 2026-06-20.
+IMPORTANT: You must internally format all dates to YYYY-MM-DD and times to 24-hour HH:MM before calling any tools. Do NOT ask the user to format the date or time. For example, if they say "tomorrow at 3 PM", calculate the date yourself and pass "15:00". Assume today is {today}.
 
 Once you have the necessary information for any action, call the appropriate tool.
 When an appointment is booked successfully, you MUST confirm it clearly exactly in this format:
@@ -39,7 +43,7 @@ async def get_or_create_session(session_id: str):
         chat = client.aio.chats.create(
             model="gemini-2.5-flash",
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_INSTRUCTION,
+                system_instruction=get_system_instruction(),
                 tools=tools_list,
                 automatic_function_calling=types.AutomaticFunctionCallingConfig(
                     disable=False,
@@ -54,7 +58,11 @@ async def process_chat(session_id: str, user_text: str) -> dict:
     chat = await get_or_create_session(session_id)
     history_len_before = len(chat.get_history())
     
-    response = await chat.send_message(user_text)
+    from fastapi import HTTPException
+    try:
+        response = await chat.send_message(user_text)
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"LLM Service Error: {str(e)}")
     
     new_messages = chat.get_history()[history_len_before:]
     tools_called = []
